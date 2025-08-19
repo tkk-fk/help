@@ -90,9 +90,6 @@
     .placard.locked .placard-controls{display:none}
     .placard.locked .unlock{display:inline-block}
 
-    /* 擬似フルスクリーン（iOSフォールバック） */
-    .placard.pseudo-fs { position:fixed; inset:0; width:100vw; height:100vh; }
-
     /* モーダル（カード追加用） */
     .modal{position:fixed; inset:0; display:none; z-index:30; align-items:center; justify-content:center}
     .modal.show{display:flex}
@@ -145,7 +142,7 @@
     <div id="grid" class="grid" aria-label="選べる言葉一覧"></div>
   </main>
 
-  <footer id="ftr" class="wrap">© 特別支援教材開発研究所 / だれでも使える支援ツール</footer>
+  <footer id="ftr" class="wrap">© 特別支援教材開発研究所 </footer>
 
   <!-- Placard -->
   <div id="placard" class="placard" role="dialog" aria-modal="true" aria-label="言葉の提示" aria-labelledby="placardText">
@@ -156,7 +153,6 @@
       <div class="placard-controls" id="placardControls">
         <button class="ghost" id="lockBtn" aria-pressed="false">🔒 ロック</button>
         <button class="ghost" id="speakBtn">🔊 読み上げ</button>
-        <button class="ghost" id="fsBtn">⛶ 全画面</button>
         <button class="danger" id="closeBtn" aria-label="閉じる">✖ 閉じる</button>
       </div>
     </div>
@@ -249,7 +245,7 @@
     const load = ()=>{
       try{
         const raw = JSON.parse(localStorage.getItem(store.keyItems) || "[]");
-        // builtIn除外＋プリセットと同一キーのユーザー項目も削除（表示だけでなく保存もクリーン化）
+        // builtIn除外＋プリセットと同一キーのユーザー項目も削除（保存もクリーン化）
         const filtered = Array.isArray(raw) ? raw.filter(x=> !x.builtIn && !presetKeySet.has(keyOf(x))) : [];
         store.items = dedupe(filtered);
         const settings = JSON.parse(localStorage.getItem(store.keySettings) || "{}");
@@ -282,7 +278,7 @@
     function render(){
       grid.innerHTML = "";
       const all = [...PRESETS, ...store.items];
-      const list = dedupe(all); // 念のため再度デデュープ
+      const list = dedupe(all);
       list.forEach((it)=>{
         const card = el("button", { class:`card tone-${it.tone||"neutral"}`, type:"button" });
         card.append(
@@ -309,8 +305,7 @@
     // --- Placard ---
     const placard = $("#placard"), placardText=$("#placardText"),
           placardEmoji=$("#placardEmoji"), unlockBtn=$("#unlockBtn"),
-          lockBtn=$("#lockBtn"), speakBtn=$("#speakBtn"),
-          fsBtn=$("#fsBtn"), closeBtn=$("#closeBtn");
+          lockBtn=$("#lockBtn"), speakBtn=$("#speakBtn"), closeBtn=$("#closeBtn");
 
     let lastFocus = null;
 
@@ -324,23 +319,6 @@
         const t = setInterval(()=>{ if(!synth.speaking) synth.resume(); else clearInterval(t); }, 200);
         synth.speak(u);
       }catch(_){}
-    }
-
-    async function goFullscreen(el){
-      try{
-        if(document.fullscreenElement) return;
-        if(el.requestFullscreen){
-          await el.requestFullscreen({navigationUI:"hide"});
-        }else{
-          throw new Error("no fullscreen");
-        }
-      }catch{
-        placard.classList.add("pseudo-fs");
-      }
-    }
-    function exitFullscreen(){
-      placard.classList.remove("pseudo-fs");
-      try{ document.exitFullscreen?.(); }catch(_){}
     }
 
     function setBackgroundAriaHidden(flag){
@@ -370,18 +348,12 @@
     }
     function closePlacard(){
       placard.classList.remove("show","locked");
-      exitFullscreen();
       document.documentElement.style.overflow="";
       setBackgroundAriaHidden(false);
       lastFocus?.focus();
     }
     function toggleLock(){ placard.classList.toggle("locked"); }
 
-    fsBtn.addEventListener("pointerup", e=>{
-      e.preventDefault(); e.stopPropagation();
-      if(!document.fullscreenElement && !placard.classList.contains("pseudo-fs")) goFullscreen(placard);
-      else exitFullscreen();
-    });
     lockBtn.addEventListener("click", toggleLock);
     unlockBtn.addEventListener("click", ()=> placard.classList.remove("locked"));
     speakBtn.addEventListener("click", ()=> store.current && speak(store.current.text));
@@ -398,7 +370,6 @@
         else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
       }
     });
-    window.addEventListener("orientationchange", ()=>{ exitFullscreen(); });
 
     // --- カード追加モーダル ---
     const modal = $("#modal"), addBtn=$("#addBtn");
@@ -426,7 +397,7 @@
       const tone  = fTone.value || "neutral";
       const newItem = { text, emoji, color, tone, builtIn:false };
 
-      // プリセットと重複するカードは保存しない（表示はプリセットを使う）
+      // プリセットと重複するカードは保存しない
       if(presetKeySet.has(keyOf(newItem))) { closeModal(); return; }
 
       // 既存ユーザーカードと重複していればスキップ
