@@ -9,7 +9,6 @@
     :root{
       --fg:#111; --bg:#fff; --muted:#666;
       --acc:#0a84ff; --card:#f7f8fa; --border:#e2e6ec;
-      --danger:#ff3b30; --warn:#ff9f0a; --calm:#0a84ff; --neutral:#6c6d70;
       --radius:20px;
     }
     *{box-sizing:border-box}
@@ -43,11 +42,17 @@
     }
     .card:active{transform:scale(.98)}
     .badge{position:absolute; left:10px; top:8px; font-size:22px; line-height:1}
-    .tone-danger{border-color:#ffd6d3; background:#fff5f4}
-    .tone-warn{border-color:#ffe4c2; background:#fff8ee}
-    .tone-calm{border-color:#cfe3ff; background:#f3f8ff}
-    .tone-neutral{border-color:#d9dade; background:#f7f7f8}
     .card .small{position:absolute; right:10px; top:8px; color:var(--muted); font-size:12px}
+
+    /* 読み上げ速度スライダー */
+    .rate-wrap{
+      display:flex; align-items:center; gap:12px;
+      margin:6px 0 8px; flex-wrap:wrap;
+    }
+    .rate-wrap label{ font-weight:700; }
+    .rate-wrap .val{ font-weight:800; color:#0a84ff; margin-left:4px; }
+    .rate-wrap input[type="range"]{ width:min(420px, 100%); }
+    .rate-note{ color:#818899; font-size:12px; }
 
     /* Placard (overlay) */
     .placard{
@@ -101,17 +106,18 @@
       padding:16px;
     }
     .sheet h2{margin:0 0 8px}
-    .sheet form{display:grid; gap:10px}
+    .sheet form{display:grid; gap:12px}
     .field{display:grid; gap:6px}
     label{font-weight:700}
-    input[type="text"], input[type="color"], select{
+
+    input[type="text"], input[type="color"]{
       font-size:16px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:#fff;
     }
     .btn{
       border:1px solid var(--border); background:#fff; padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:700;
     }
-    .btn.primary{background:var(--acc); color:#fff; border-color:#0b6fe0}
-    .btn.danger{background:var(--danger); color:#fff; border-color:#e4332a}
+    .btn.primary{background:#0a84ff; color:#fff; border-color:#0b6fe0}
+    .btn.danger{background:#ff3b30; color:#fff; border-color:#e4332a}
     .toolbar{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
     footer{padding:20px 0 40px; color:#818899; text-align:center; font-size:12px}
 
@@ -128,6 +134,22 @@
       background:#0a84ff; color:#fff; border:none; box-shadow:0 6px 18px rgba(0,0,0,.2);
       cursor:pointer;
     }
+
+    /* 色スウォッチ（白い楕円） */
+    .swatch-oval{
+      display:inline-flex; align-items:center; gap:10px;
+      background:#fff; border:1px solid var(--border); border-radius:999px;
+      padding:8px 12px; box-shadow:0 1px 0 rgba(0,0,0,.03);
+      width:fit-content;
+    }
+    .swatch-dot{
+      width:28px; height:28px; border-radius:999px; border:1px solid var(--border);
+      background:#0a84ff;
+    }
+    .swatch-hex{
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size:14px; font-weight:700; color:#334155;
+    }
   </style>
 </head>
 <body>
@@ -138,6 +160,17 @@
   </header>
 
   <main id="main" class="wrap">
+    <!-- 読み上げ速度コントロール -->
+    <div class="rate-wrap" aria-label="読み上げ速度の調整">
+      <label for="rate">読み上げ速度 <span id="rateVal" class="val">1.0×</span></label>
+      <input id="rate" type="range" min="0.6" max="2.0" step="0.1" value="1.0" list="rateTicks" aria-describedby="rateNote" />
+      <datalist id="rateTicks">
+        <option value="0.6"></option><option value="0.8"></option><option value="1.0"></option>
+        <option value="1.2"></option><option value="1.4"></option><option value="1.6"></option><option value="1.8"></option><option value="2.0"></option>
+      </datalist>
+      
+    </div>
+
     <p class="hint">カードをタップ → 画面いっぱいに表示。</p>
     <div id="grid" class="grid" aria-label="選べる言葉一覧"></div>
   </main>
@@ -175,16 +208,12 @@
         <div class="field">
           <label for="fColor">背景色（印籠色）</label>
           <input id="fColor" type="color" value="#0a84ff" />
+          <div class="swatch-oval" aria-hidden="true">
+            <div id="swatchDot" class="swatch-dot"></div>
+            <div id="swatchHex" class="swatch-hex">#0A84FF</div>
+          </div>
         </div>
-        <div class="field">
-          <label for="fTone">トーン</label>
-          <select id="fTone">
-            <option value="calm">穏やか（青）</option>
-            <option value="warn">注意（橙）</option>
-            <option value="danger">緊急（赤）</option>
-            <option value="neutral">中立（灰）</option>
-          </select>
-        </div>
+        <!-- トーン選択は削除 -->
       </form>
       <div class="toolbar">
         <button class="btn" id="cancelModal" type="button">閉じる</button>
@@ -200,10 +229,10 @@
   ;(()=>{
     // --- 初期プリセット（ストレージには保存しない） ---
     const PRESETS = [
-      { text:"たすけてください", color:"#ff3b30", emoji:"🆘", tone:"danger", builtIn:true },
-      { text:"こまっています",     color:"#ff9f0a", emoji:"🆘", tone:"warn",   builtIn:true },
-      { text:"おしえてください",   color:"#0a84ff", emoji:"🙋", tone:"calm",   builtIn:true },
-      { text:"わかりません",       color:"#6c6d70", emoji:"❓", tone:"neutral",builtIn:true },
+      { text:"たすけてください", color:"#ff3b30", emoji:"🆘", builtIn:true },
+      { text:"こまっています",     color:"#ff9f0a", emoji:"🆘", builtIn:true },
+      { text:"おしえてください",   color:"#0a84ff", emoji:"🙋", builtIn:true },
+      { text:"わかりません",       color:"#6c6d70", emoji:"❓", builtIn:true },
     ];
     const presetKeySet = new Set(PRESETS.map(k=>`${k.text}|${k.emoji||""}|${k.color||""}`));
 
@@ -233,6 +262,27 @@
     };
     const keyOf = (x)=>`${x.text}|${x.emoji||""}|${x.color||""}`;
 
+    function clamp(v,min,max){ return Math.min(max, Math.max(min, v)); }
+
+    // 色合成（カードの淡色背景/枠作成に使用）
+    function hexToRgb(hex){
+      const h = hex.replace('#','').trim();
+      const f = h.length===3 ? h.split('').map(c=>c+c).join('') : h;
+      const n = parseInt(f,16);
+      return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
+    }
+    function rgbToHex(r,g,b){
+      return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase();
+    }
+    function mixHex(hex1, hex2, w){ // 0..1 で hex2 の比率
+      const a=hexToRgb(hex1), b=hexToRgb(hex2);
+      const r=Math.round(a.r*(1-w)+b.r*w);
+      const g=Math.round(a.g*(1-w)+b.g*w);
+      const b2=Math.round(a.b*(1-w)+b.b*w);
+      return rgbToHex(r,g,b2);
+    }
+    function tint(hex, w){ return mixHex(hex, "#FFFFFF", w); } // 白へ寄せる
+
     function dedupe(list){
       const seen = new Set();
       return list.filter(it=>{ const k=keyOf(it); if(seen.has(k)) return false; seen.add(k); return true; });
@@ -245,11 +295,12 @@
     const load = ()=>{
       try{
         const raw = JSON.parse(localStorage.getItem(store.keyItems) || "[]");
-        // builtIn除外＋プリセットと同一キーのユーザー項目も削除（保存もクリーン化）
+        // builtIn除外＋プリセット重複を排除
         const filtered = Array.isArray(raw) ? raw.filter(x=> !x.builtIn && !presetKeySet.has(keyOf(x))) : [];
         store.items = dedupe(filtered);
         const settings = JSON.parse(localStorage.getItem(store.keySettings) || "{}");
         store.settings = { ...store.settings, ...settings };
+        store.settings.voiceRate = clamp(Number(store.settings.voiceRate||1.0), 0.6, 2.0);
       }catch(_){
         store.items = [];
       }
@@ -273,14 +324,23 @@
     }
     function haptic(ms=10){ try{ navigator.vibrate?.(ms); }catch(_){ } }
 
-    // --- UI描画 ---
+    // --- UI描画（カード色 = 背景色に合わせる） ---
     const grid = $("#grid");
+    function styleCardByColor(card, color){
+      try{
+        const bg = tint(color, 0.92);  // 92%白に寄せた淡色
+        const bd = tint(color, 0.70);  // 枠は少し濃い
+        card.style.background = bg;
+        card.style.borderColor = bd;
+      }catch(_){}
+    }
     function render(){
       grid.innerHTML = "";
       const all = [...PRESETS, ...store.items];
       const list = dedupe(all);
       list.forEach((it)=>{
-        const card = el("button", { class:`card tone-${it.tone||"neutral"}`, type:"button" });
+        const card = el("button", { class:`card`, type:"button" });
+        styleCardByColor(card, it.color || "#6c6d70");
         card.append(
           el("div",{class:"badge"}, it.emoji || "🪬"),
           el("div",{}, it.text)
@@ -302,6 +362,24 @@
       save(); render();
     }
 
+    // --- 読み上げ速度UI ---
+    const rateSlider = $("#rate");
+    const rateValSpan = $("#rateVal");
+    function updateRateUI(v){
+      const val = clamp(Number(v)||1.0, 0.6, 2.0);
+      rateSlider.value = val;
+      rateValSpan.textContent = val.toFixed(1) + "×";
+    }
+    function initRateUI(){
+      updateRateUI(store.settings.voiceRate || 1.0);
+      rateSlider.addEventListener("input", ()=>{
+        const nv = clamp(Number(rateSlider.value)||1.0, 0.6, 2.0);
+        store.settings.voiceRate = nv;
+        saveSettings();
+        updateRateUI(nv);
+      });
+    }
+
     // --- Placard ---
     const placard = $("#placard"), placardText=$("#placardText"),
           placardEmoji=$("#placardEmoji"), unlockBtn=$("#unlockBtn"),
@@ -315,7 +393,7 @@
         const synth = window.speechSynthesis;
         synth.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        u.lang="ja-JP"; u.rate=Number(store.settings.voiceRate||1.0);
+        u.lang="ja-JP"; u.rate=clamp(Number(store.settings.voiceRate||1.0), 0.6, 2.0);
         const t = setInterval(()=>{ if(!synth.speaking) synth.resume(); else clearInterval(t); }, 200);
         synth.speak(u);
       }catch(_){}
@@ -374,12 +452,19 @@
     // --- カード追加モーダル ---
     const modal = $("#modal"), addBtn=$("#addBtn");
     const addForm = $("#addForm");
-    const fText=$("#fText"), fEmoji=$("#fEmoji"), fColor=$("#fColor"), fTone=$("#fTone");
+    const fText=$("#fText"), fEmoji=$("#fEmoji"), fColor=$("#fColor");
+    const swatchDot=$("#swatchDot"), swatchHex=$("#swatchHex");
+
+    function updateSwatch(hex){
+      const v = (hex||"#0a84ff").toUpperCase();
+      swatchDot.style.background = v;
+      swatchHex.textContent = v;
+    }
 
     function openModal(){
       addForm.reset();
       fColor.value = "#0a84ff";
-      fTone.value = "calm";
+      updateSwatch("#0a84ff");
       modal.classList.add("show");
       setTimeout(()=> fText.focus(), 0);
     }
@@ -388,14 +473,14 @@
     $("#closeModal").addEventListener("click", closeModal);
     $("#cancelModal").addEventListener("click", closeModal);
     addBtn.addEventListener("click", openModal);
+    fColor.addEventListener("input", ()=> updateSwatch(fColor.value));
 
     function saveNewCard(){
       const text = (fText.value||"").trim();
       if(!text){ fText.focus(); return; }
       const emoji = (fEmoji.value||"").trim() || "🪬";
-      const color = fColor.value || "#0a84ff";
-      const tone  = fTone.value || "neutral";
-      const newItem = { text, emoji, color, tone, builtIn:false };
+      const color = (fColor.value || "#0a84ff").toUpperCase();
+      const newItem = { text, emoji, color, builtIn:false };
 
       // プリセットと重複するカードは保存しない
       if(presetKeySet.has(keyOf(newItem))) { closeModal(); return; }
@@ -415,6 +500,10 @@
     // --- 初期化 ---
     load();
     render();
+    // 読み上げ速度スライダー
+    const rateSliderEl = document.getElementById("rate");
+    if(rateSliderEl){ updateRateUI(store.settings.voiceRate || 1.0); rateSliderEl.value = store.settings.voiceRate; }
+    initRateUI();
   })();
   </script>
 </body>
